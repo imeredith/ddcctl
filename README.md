@@ -27,16 +27,12 @@ brew install --HEAD ddcctl
 
 ## Release
 
-Build the Homebrew release archive and checksum:
+Use the `Release` GitHub Actions workflow with a version like `0.1.0`. The workflow builds the macOS arm64 archive, updates the Homebrew formula checksum, commits the formula change, tags the release, and uploads the archive to GitHub Releases.
+
+To build the Homebrew release archive locally instead:
 
 ```sh
 scripts/package-release.sh 0.1.0
-```
-
-Upload the generated archive to the matching GitHub release:
-
-```sh
-gh release create v0.1.0 dist/ddcctl-v0.1.0-macos-arm64.tar.gz
 ```
 
 ## Usage

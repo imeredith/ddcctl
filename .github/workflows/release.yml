@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, without the leading v"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: macos-14
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate runner architecture
+        run: |
+          test "$(uname -m)" = "arm64"
+
+      - name: Configure release variables
+        id: release
+        run: |
+          version="${{ inputs.version }}"
+          version="${version#v}"
+          tag="v${version}"
+          archive="dist/ddcctl-${tag}-macos-arm64.tar.gz"
+
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+          printf 'archive=%s\n' "$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Build archive
+        run: scripts/package-release.sh "${{ steps.release.outputs.version }}"
+
+      - name: Calculate checksum
+        id: checksum
+        run: |
+          sha256="$(shasum -a 256 "${{ steps.release.outputs.archive }}" | cut -d ' ' -f 1)"
+          printf 'sha256=%s\n' "$sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          sha256="${{ steps.checksum.outputs.sha256 }}"
+          url="https://github.com/imeredith/ddcctl/releases/download/${tag}/ddcctl-${tag}-macos-arm64.tar.gz"
+
+          perl -0pi -e 's|url "https://github\.com/imeredith/ddcctl/releases/download/v[^"]+/ddcctl-v[^\"]+-macos-arm64\.tar\.gz"|url "'"$url"'"|' Formula/ddcctl.rb
+          perl -0pi -e 's|sha256 "[a-f0-9]{64}"|sha256 "'"$sha256"'"|' Formula/ddcctl.rb
+
+      - name: Verify formula
+        run: ruby -c Formula/ddcctl.rb
+
+      - name: Commit formula update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/ddcctl.rb
+          if git diff --cached --quiet; then
+            printf 'Formula already up to date.\n'
+          else
+            git commit -m "Update Homebrew formula for ${{ steps.release.outputs.tag }}"
+            git push origin main
+          fi
+
+      - name: Create tag
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          git fetch origin --tags
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            printf 'Tag %s already exists.\n' "$tag"
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          archive="${{ steps.release.outputs.archive }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$archive" --clobber
+          else
+            gh release create "$tag" "$archive" --title "$tag" --notes "Release $tag"
+          fi
