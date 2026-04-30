@@ -15,14 +15,14 @@ The binary will be at `.build/release/ddcctl`.
 This repository includes a Homebrew formula that installs the published release binary.
 
 ```sh
-brew tap imeredith/ddcctl git@github.com:imeredith/ddcctl.git
-brew install ddcctl
+brew tap imeredith/ddcctl https://github.com/imeredith/ddcctl.git
+brew install imeredith/ddcctl/ddcctl
 ```
 
 To install directly from the `main` branch instead:
 
 ```sh
-brew install --HEAD ddcctl
+brew install --HEAD imeredith/ddcctl/ddcctl
 ```
 
 ## Release
